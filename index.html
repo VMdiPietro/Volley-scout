@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VolleyScout Elite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; overscroll-behavior-y: contain; background-color: #0a0a0a; color: #ffffff; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Court Layout */
+        .taraflex {
+            background-color: #0a0a0a; /* Free zone */
+            position: relative;
+            width: 100%;
+            flex: 1 1 0%;
+            min-height: 0;
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            padding: 0.5rem;
+        }
+        .inner-court {
+            background-color: #7f1d1d; /* bg-red-900 */
+            border: 3px solid #ffffff;
+            width: 100%;
+            height: 100%;
+            max-width: 500px;
+            position: relative;
+            box-shadow: 0 0 20px rgba(127, 29, 29, 0.5);
+        }
+        .attack-line {
+            position: absolute;
+            top: 33.33%;
+            left: 0;
+            width: 100%;
+            border-top: 3px solid #ffffff;
+        }
+        .net-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 12px;
+            background: repeating-linear-gradient(45deg, #ffffff, #ffffff 10px, #000000 10px, #000000 20px);
+            border-bottom: 2px solid #ef4444; /* Red net tape */
+        }
+        
+        /* Player Nodes */
+        .player-node {
+            position: absolute;
+            width: 5.5rem;
+            height: 5.5rem;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background-color: #262626; /* neutral-800 */
+            border: 2px solid #525252;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s, border-color 0.2s;
+            overflow: hidden;
+            z-index: 10;
+        }
+        .player-node:active { transform: translate(-50%, -50%) scale(0.95); }
+        .player-node.active-server { border-color: #ffffff; box-shadow: 0 0 15px #ffffff; }
+        
+        /* Positions */
+        .pos-4 { top: 18%; left: 20%; }
+        .pos-3 { top: 18%; left: 50%; }
+        .pos-2 { top: 18%; left: 80%; }
+        .pos-5 { top: 60%; left: 20%; }
+        .pos-6 { top: 75%; left: 50%; }
+        .pos-1 { top: 60%; left: 80%; }
+
+        /* Slide-over */
+        .slide-over {
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .slide-over.open { transform: translateX(0); }
+
+        /* SVGs in Player Nodes */
+        .node-svg-bg {
+            position: absolute;
+            inset: 0;
+            opacity: 0.8;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            transform: scale(1.2);
+        }
+        .node-content { z-index: 1; width: 100%; height: 100%; position: relative; }
+        
+        /* Toast */
+        .toast {
+            position: fixed; top: 1rem; left: 50%; transform: translateX(-50%) translateY(-150%);
+            transition: transform 0.3s ease-in-out; z-index: 100;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body class="antialiased overflow-hidden h-[100dvh] w-full">
+
+    <!-- APP CONTAINER -->
+    <div id="app" class="w-full h-[100dvh] relative flex flex-col mx-auto max-w-lg shadow-2xl bg-neutral-950 overflow-hidden">
+        
+        <!-- ================= SETUP VIEW ================= -->
+        <div id="view-setup" class="absolute inset-0 flex flex-col z-50 bg-neutral-950 overflow-y-auto">
+            <div class="p-6 pb-2 bg-red-900 shadow-md border-b border-red-700">
+                <h1 class="text-3xl font-black text-white tracking-tight">VolleyScout <span class="text-red-400">Elite</span></h1>
+                <p class="text-sm font-bold text-red-200 mt-1 uppercase tracking-widest">Match Setup</p>
+            </div>
+
+            <div class="p-5 space-y-6 flex-1">
+                <!-- Roster Section -->
+                <div class="bg-neutral-900 rounded-xl p-4 border border-neutral-800">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-lg font-bold text-white">Team Roster</h2>
+                        <div class="flex gap-2">
+                            <button onclick="addPlayer()" class="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-green-500 transition-colors">+ Add</button>
+                            <button onclick="resetRoster()" class="bg-red-800 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-red-700 transition-colors">Reset</button>
+                            <span id="roster-count" class="text-xs font-bold bg-neutral-800 px-2 py-1 rounded text-neutral-400 hidden">0 Players</span>
+                        </div>
+                    </div>
+                    <div id="roster-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto hide-scrollbar mb-1 pr-1">
+                        <!-- Auto populated with editable fields -->
+                    </div>
+                </div>
+
+                <!-- Starting Lineup -->
+                <div class="bg-neutral-900 rounded-xl p-4 border border-neutral-800">
+                    <h2 class="text-lg font-bold text-white mb-1">Our Starting Lineup</h2>
+                    <p class="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-4">Set YOUR team's players on the court</p>
+                    
+                    <div class="flex justify-between items-center bg-neutral-950 p-2 rounded-lg mb-4 border border-neutral-800">
+                        <span class="text-sm font-bold text-neutral-400 ml-2">Who serves first?</span>
+                        <div class="flex gap-1">
+                            <button id="btn-serve-us" onclick="setInitialServe('us')" class="px-4 py-1.5 text-xs font-black rounded text-white bg-red-600 uppercase tracking-wider transition-colors">We Serve</button>
+                            <button id="btn-serve-them" onclick="setInitialServe('them')" class="px-4 py-1.5 text-xs font-black rounded text-neutral-500 bg-transparent uppercase tracking-wider transition-colors hover:text-white">They Serve</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <!-- P4, P3, P2 -->
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-neutral-500 block text-center">POS 4</label>
+                            <select id="lineup-pos-4" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-neutral-700 font-bold focus:border-red-500 outline-none"></select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-neutral-500 block text-center">POS 3</label>
+                            <select id="lineup-pos-3" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-neutral-700 font-bold focus:border-red-500 outline-none"></select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-neutral-500 block text-center">POS 2</label>
+                            <select id="lineup-pos-2" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-neutral-700 font-bold focus:border-red-500 outline-none"></select>
+                        </div>
+                        <!-- P5, P6, P1 -->
+                        <div class="space-y-1 mt-2">
+                            <label class="text-[10px] font-bold text-neutral-500 block text-center">POS 5</label>
+                            <select id="lineup-pos-5" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-neutral-700 font-bold focus:border-red-500 outline-none"></select>
+                        </div>
+                        <div class="space-y-1 mt-2">
+                            <label class="text-[10px] font-bold text-neutral-500 block text-center">POS 6</label>
+                            <select id="lineup-pos-6" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-neutral-700 font-bold focus:border-red-500 outline-none"></select>
+                        </div>
+                        <div class="space-y-1 mt-2 relative">
+                            <label class="text-[10px] font-bold text-neutral-500 block text-center">POS 1</label>
+                            <select id="lineup-pos-1" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-neutral-700 font-bold focus:border-red-500 outline-none"></select>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t border-neutral-800">
+                        <label class="text-xs font-bold text-red-400 block mb-1">Starting Libero</label>
+                        <select id="lineup-pos-L" class="w-full bg-neutral-800 text-white text-xs p-2 rounded border border-red-900/50 font-bold focus:border-red-500 outline-none"></select>
+                    </div>
+                </div>
+
+                <button onclick="startGame()" class="w-full bg-white text-black py-4 rounded-xl font-black text-lg shadow-lg hover:bg-gray-200 transition-all uppercase tracking-widest mt-4">Start Match</button>
+            </div>
+        </div>
+
+        <!-- ================= COURT VIEW ================= -->
+        <div id="view-court" class="hidden flex-1 flex-col relative h-full min-h-0 overflow-hidden">
+            <!-- Scoreboard -->
+            <div class="flex-none bg-neutral-950 px-4 py-2 flex justify-between items-center z-20 shadow-md">
+                <div class="text-center flex-1">
+                    <p class="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Our Team</p>
+                    <div class="text-4xl font-black text-white leading-none" id="score-us">0</div>
+                    <div class="text-xs font-bold text-neutral-500 mt-1" id="sets-us">Sets: 0</div>
+                </div>
+                <div class="flex-none px-4">
+                    <button onclick="endSetConfirm()" class="bg-neutral-800 border border-neutral-700 text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider">End Set</button>
+                    <div class="text-center mt-2 text-xs font-black text-neutral-500" id="current-set-label">SET 1</div>
+                </div>
+                <div class="text-center flex-1">
+                    <p class="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1">Opponent</p>
+                    <div class="text-4xl font-black text-neutral-300 leading-none" id="score-them">0</div>
+                    <div class="text-xs font-bold text-neutral-500 mt-1" id="sets-them">Sets: 0</div>
+                </div>
+            </div>
+            <div class="flex-none w-full bg-neutral-900 flex">
+                <div id="serve-ind-us" class="h-1 flex-1 bg-red-600 transition-opacity"></div>
+                <div id="serve-ind-them" class="h-1 flex-1 bg-transparent transition-opacity"></div>
+            </div>
+
+            <!-- Court Area -->
+            <div class="flex-1 min-h-0 taraflex overflow-hidden">
+                <div class="inner-court">
+                    <div class="net-line"></div>
+                    <div class="attack-line"></div>
+                    
+                    <!-- Players inserted dynamically via JS -->
+                    <div id="court-nodes"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Control Bar -->
+            <div class="flex-none bg-neutral-950 border-t border-neutral-800 p-3 flex gap-2 z-20 relative" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
+                <button onclick="openStats()" class="flex-1 bg-neutral-800 text-white font-bold py-3 rounded-lg text-sm uppercase tracking-wide border border-neutral-700 hover:bg-neutral-700 transition-colors">Stats / Export</button>
+                <button onclick="quickAction('them', 'point', false)" class="flex-1 bg-red-900 text-white font-bold py-3 rounded-lg text-sm uppercase tracking-wide shadow-md border border-red-700 hover:bg-red-800 transition-colors">Opp Point</button>
+                <button onclick="quickAction('us', 'point', false)" class="flex-1 bg-green-700 text-white font-bold py-3 rounded-lg text-sm uppercase tracking-wide shadow-md border border-green-600 hover:bg-green-600 transition-colors">Our Point</button>
+            </div>
+        </div>
+
+        <!-- ================= ACTION SLIDE-OVER ================= -->
+        <div id="action-panel" class="absolute inset-0 bg-neutral-950/95 backdrop-blur-sm z-40 slide-over flex flex-col">
+            <div class="p-4 bg-neutral-900 border-b border-neutral-800 flex justify-between items-center shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div id="action-role-icon" class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center border border-neutral-700"></div>
+                    <div>
+                        <div class="text-xs font-bold text-red-400 uppercase tracking-widest" id="action-pos-label">Position</div>
+                        <div class="text-xl font-black text-white leading-tight" id="action-player-name">Player Name</div>
+                    </div>
+                </div>
+                <button onclick="closeAction()" class="bg-neutral-800 w-10 h-10 rounded-full flex items-center justify-center text-white text-xl border border-neutral-700 hover:bg-neutral-700">&times;</button>
+            </div>
+
+            <div class="flex-1 p-3 overflow-y-auto space-y-4">
+                <!-- Service Only Options (shown when we are serving) -->
+                <div id="serve-actions-container" class="hidden space-y-4">
+                    <div class="bg-neutral-900 p-4 rounded-xl border border-neutral-800">
+                        <h3 class="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-3">Service</h3>
+                        <div class="flex flex-col gap-3">
+                            <button onclick="trackAction('Serve', 'Ace', true)" class="bg-green-600 py-4 rounded-lg font-black text-white text-base shadow">Ace</button>
+                            <button onclick="trackAction('Serve', 'Good', false)" class="bg-neutral-700 py-4 rounded-lg font-bold text-white text-base shadow">Good</button>
+                            <button onclick="trackAction('Serve', 'Neutral', false)" class="bg-neutral-700 py-4 rounded-lg font-bold text-white text-base shadow">Neutral</button>
+                            <button onclick="trackAction('Serve', 'Mistake', true)" class="bg-red-600 py-4 rounded-lg font-bold text-white text-base shadow">Mistake</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Player Actions (shown when clicking on a player) -->
+                <div id="player-actions-container" class="space-y-4">
+                    <button onclick="openSubModal()" class="w-full bg-neutral-800 text-white py-2 rounded font-bold text-sm uppercase tracking-wider border border-neutral-700">🔄 Substitute Player</button>
+                    
+                    <!-- Passing -->
+                    <div class="bg-neutral-900 p-3 rounded-xl border border-neutral-800">
+                        <h3 class="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-neutral-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/></svg>
+                            Passing
+                        </h3>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button onclick="trackAction('Pass', '++', false)" class="bg-green-600 py-3 rounded-lg font-black text-white shadow">++</button>
+                            <button onclick="trackAction('Pass', '+', false)" class="bg-neutral-700 py-3 rounded-lg font-black text-white shadow">+</button>
+                            <button onclick="trackAction('Pass', '-', false)" class="bg-neutral-700 py-3 rounded-lg font-black text-white shadow">-</button>
+                            <button onclick="trackAction('Pass', '--', true)" class="bg-red-600 py-3 rounded-lg font-black text-white shadow">--</button>
+                        </div>
+                    </div>
+
+                    <!-- Attack -->
+                    <div class="bg-neutral-900 p-3 rounded-xl border border-neutral-800">
+                        <h3 class="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-neutral-500" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                            Attack
+                        </h3>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="trackAction('Attack', 'Kill', true)" class="bg-green-600 py-3 rounded-lg font-black text-white shadow">Kill</button>
+                            <button onclick="trackAction('Attack', 'Play', false)" class="bg-neutral-700 py-3 rounded-lg font-black text-white shadow">In Play</button>
+                            <button onclick="trackAction('Attack', 'Err', true)" class="bg-red-600 py-3 rounded-lg font-black text-white shadow">Error</button>
+                        </div>
+                    </div>
+
+                    <!-- Block -->
+                    <div class="bg-neutral-900 p-3 rounded-xl border border-neutral-800">
+                        <h3 class="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-2">Block</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="trackAction('Block', 'Block', true)" class="bg-green-600 py-3 rounded-lg font-black text-white text-sm shadow">Block</button>
+                            <button onclick="trackAction('Block', 'Touch', false)" class="bg-neutral-700 py-3 rounded-lg font-bold text-white text-sm shadow">Touch</button>
+                            <button onclick="trackAction('Block', 'Block out', true)" class="bg-red-600 py-3 rounded-lg font-bold text-white text-sm shadow">Block out</button>
+                            <button onclick="trackAction('Block', 'Invasion', true)" class="bg-red-600 py-3 rounded-lg font-bold text-white text-sm shadow">Invasion</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= STATS VIEW ================= -->
+        <div id="view-stats" class="hidden absolute inset-0 z-50 bg-neutral-950 flex flex-col">
+            <div class="p-4 bg-red-900 flex justify-between items-center shadow-lg border-b border-red-700">
+                <h2 class="text-xl font-black text-white uppercase tracking-wider">Match Stats</h2>
+                <button onclick="closeStats()" class="bg-white/20 px-4 py-1.5 rounded text-white text-sm font-bold uppercase hover:bg-white/30">Back</button>
+            </div>
+            
+            <div class="p-4 flex flex-col gap-3 border-b border-neutral-900">
+                <div class="flex gap-2">
+                    <select id="stat-filter-set" onchange="renderStats()" class="flex-1 bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-sm font-bold outline-none"></select>
+                    <button onclick="exportCSV()" class="bg-neutral-800 border border-neutral-700 text-white px-4 py-2 rounded text-sm font-bold shadow hover:bg-neutral-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        CSV
+                    </button>
+                </div>
+                
+                <!-- Stats Toggle Tabs -->
+                <div class="flex bg-neutral-900 border border-neutral-800 p-1 rounded-lg">
+                    <button onclick="switchStatsTab('pbp')" id="tab-pbp" class="flex-1 py-1.5 rounded-md text-xs font-black tracking-wider uppercase transition-colors bg-neutral-700 text-white">Play by Play</button>
+                    <button onclick="switchStatsTab('player')" id="tab-player" class="flex-1 py-1.5 rounded-md text-xs font-black tracking-wider uppercase transition-colors text-neutral-500 hover:text-white">Player Stats</button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 hide-scrollbar">
+                <div id="stats-container" class="space-y-4"></div>
+            </div>
+            
+            <div class="p-4 border-t border-neutral-900 bg-neutral-950">
+                <button onclick="reqConfirmReset()" class="w-full bg-red-950 text-red-500 border border-red-900 py-3 rounded-lg font-bold uppercase tracking-wider text-sm hover:bg-red-900 hover:text-white transition-colors">Reset Match Data</button>
+            </div>
+        </div>
+
+        <!-- ================= MODALS & TOASTS ================= -->
+        <!-- Toast Notification -->
+        <div id="toast" class="toast bg-white text-black px-6 py-3 rounded-full shadow-2xl font-black text-sm uppercase tracking-wide flex items-center gap-2 border border-neutral-300 pointer-events-none">
+            <span id="toast-icon">🏐</span> <span id="toast-msg">Action Saved</span>
+        </div>
+
+        <!-- Custom Confirm Modal -->
+        <div id="confirm-modal" class="hidden absolute inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div class="bg-neutral-900 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-neutral-800 p-5 text-center">
+                <h3 class="font-black text-white text-lg mb-2" id="confirm-msg">Are you sure?</h3>
+                <div class="flex gap-3 mt-6">
+                    <button onclick="closeConfirm(false)" class="flex-1 bg-neutral-800 text-white py-3 rounded-lg font-bold uppercase tracking-wider text-sm border border-neutral-700">Cancel</button>
+                    <button onclick="closeConfirm(true)" class="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold uppercase tracking-wider text-sm shadow">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sub Modal -->
+        <div id="sub-modal" class="hidden absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-neutral-900 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-neutral-800">
+                <div class="bg-neutral-800 p-4 border-b border-neutral-700 flex justify-between items-center">
+                    <h3 class="font-black text-white">Select Substitute</h3>
+                    <button onclick="closeSubModal()" class="text-neutral-400 text-2xl leading-none">&times;</button>
+                </div>
+                <div class="p-2 max-h-[60vh] overflow-y-auto" id="sub-list"></div>
+            </div>
+        </div>
+
+    </div> <!-- End App -->
+
+    <script>
+        // --- SVG Role Icons Dictionary ---
+        const SVGS = {
+            'S': `<svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="#3b82f6" stroke-width="6" stroke-linecap="round"><path d="M30 60 Q50 25 70 60"/><path d="M40 50 L35 35 M60 50 L65 35"/></svg>`,
+            'MB': `<svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="round"><rect x="32" y="25" width="14" height="45" rx="6"/><rect x="54" y="25" width="14" height="45" rx="6"/></svg>`,
+            'OH': `<svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="#f97316" stroke-width="6" stroke-linecap="round"><path d="M40 75 L50 40 L70 55" stroke-linejoin="round"/><circle cx="75" cy="60" r="10" fill="#f97316"/></svg>`,
+            'OP': `<svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="#facc15" stroke-width="6" stroke-linecap="round"><path d="M60 75 L50 40 L30 55" stroke-linejoin="round"/><circle cx="25" cy="60" r="10" fill="#facc15"/></svg>`,
+            'L': `<svg class="w-full h-full" viewBox="0 0 100 100" fill="none" stroke="#ef4444" stroke-width="6" stroke-linecap="round"><path d="M25 35 L50 75 L75 35" stroke-linejoin="round"/><circle cx="50" cy="80" r="10" fill="#ef4444"/></svg>`
+        };
+
+        // --- Default 14 Player Roster ---
+        const initialPlayers = [
+            { id: 'p1', num: '1', name: 'Miller', role: 'S' },
+            { id: 'p2', num: '2', name: 'Davis', role: 'S' },
+            { id: 'p3', num: '3', name: 'Smith', role: 'OH' },
+            { id: 'p4', num: '4', name: 'Johnson', role: 'OH' },
+            { id: 'p5', num: '5', name: 'Williams', role: 'OH' },
+            { id: 'p6', num: '6', name: 'Brown', role: 'OH' },
+            { id: 'p7', num: '7', name: 'Jones', role: 'MB' },
+            { id: 'p8', num: '8', name: 'Garcia', role: 'MB' },
+            { id: 'p9', num: '9', name: 'Martinez', role: 'MB' },
+            { id: 'p10', num: '10', name: 'Rodriguez', role: 'MB' },
+            { id: 'p11', num: '11', name: 'Hernandez', role: 'OP' },
+            { id: 'p12', num: '12', name: 'Lopez', role: 'OP' },
+            { id: 'p13', num: '13', name: 'Gonzalez', role: 'L' },
+            { id: 'p14', num: '14', name: 'Wilson', role: 'L' }
+        ];
+
+        // --- App State ---
+        let state = {
+            roster: [],
+            serve: 'us',
+            lineup: {},
+            court: {},
+            startingLibero: null,
+            replacedMB: null,
+            score: { us: 0, them: 0 },
+            sets: { us: 0, them: 0 },
+            currentSet: 1,
+            history: [],
+            selectedPos: null,
+            statsTab: 'pbp' // 'pbp' or 'player'
+        };
+
+        // --- Custom Confirm Logic ---
+        let pendingConfirmCallback = null;
+        function customConfirm(msg, callback) {
+            document.getElementById('confirm-msg').innerText = msg;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            pendingConfirmCallback = callback;
+        }
+        function closeConfirm(result) {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            if (result && pendingConfirmCallback) pendingConfirmCallback();
+            pendingConfirmCallback = null;
+        }
+
+        // --- Initialization ---
+        function initApp() {
+            const savedRoster = localStorage.getItem('volleyScoutRoster');
+            if (savedRoster) {
+                state.roster = JSON.parse(savedRoster);
+            } else {
+                state.roster = JSON.parse(JSON.stringify(initialPlayers));
+            }
+            renderRosterList();
+            populateDropdowns();
+            setInitialServe('us');
+        }
+
+        // --- Setup Logic ---
+        function renderRosterList() {
+            const list = document.getElementById('roster-list');
+            list.innerHTML = '';
+            state.roster.forEach(p => {
+                list.innerHTML += `
+                    <div class="flex items-center gap-2 bg-neutral-800 p-2 rounded border border-neutral-700">
+                        <input type="number" onchange="updatePlayer('${p.id}', 'num', this.value)" value="${p.num}" placeholder="#" class="w-12 bg-neutral-900 text-white text-xs font-bold p-1.5 rounded border border-neutral-600 outline-none focus:border-red-500 text-center hide-scrollbar">
+                        <input type="text" onchange="updatePlayer('${p.id}', 'name', this.value)" value="${p.name}" placeholder="Player Name" class="flex-1 min-w-0 bg-neutral-900 text-white text-xs font-bold p-1.5 rounded border border-neutral-600 outline-none focus:border-red-500">
+                        <select onchange="updatePlayer('${p.id}', 'role', this.value)" class="w-16 bg-neutral-900 text-white text-xs font-bold p-1.5 rounded border border-neutral-600 outline-none focus:border-red-500 text-center appearance-none">
+                            <option value="S" ${p.role === 'S' ? 'selected' : ''}>S</option>
+                            <option value="OH" ${p.role === 'OH' ? 'selected' : ''}>OH</option>
+                            <option value="MB" ${p.role === 'MB' ? 'selected' : ''}>MB</option>
+                            <option value="OP" ${p.role === 'OP' ? 'selected' : ''}>OP</option>
+                            <option value="L" ${p.role === 'L' ? 'selected' : ''}>L</option>
+                        </select>
+                        <button onclick="reqDeletePlayer('${p.id}')" class="text-red-500 hover:text-red-400 font-bold text-xl leading-none px-1">&times;</button>
+                    </div>`;
+            });
+            document.getElementById('roster-count').innerText = `${state.roster.length} Players`;
+        }
+
+        function saveRoster() {
+            localStorage.setItem('volleyScoutRoster', JSON.stringify(state.roster));
+            populateDropdowns();
+            autoFillLineup();
+        }
+
+        function updatePlayer(id, field, value) {
+            const player = state.roster.find(p => p.id === id);
+            if (player) {
+                player[field] = value;
+                saveRoster();
+            }
+        }
+
+        function reqDeletePlayer(id) {
+            customConfirm('Remove this player from the roster?', () => {
+                state.roster = state.roster.filter(p => p.id !== id);
+                renderRosterList();
+                saveRoster();
+                showToast("Player Removed");
+            });
+        }
+
+        function addPlayer() {
+            const newId = 'p' + Date.now();
+            state.roster.push({ id: newId, num: '', name: '', role: 'OH' });
+            renderRosterList();
+            saveRoster();
+            const list = document.getElementById('roster-list');
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function resetRoster() {
+            customConfirm('Delete your current team and reset to the fictional default roster?', () => {
+                state.roster = JSON.parse(JSON.stringify(initialPlayers));
+                renderRosterList();
+                saveRoster();
+                showToast("Roster reset to default");
+            });
+        }
+
+        function populateDropdowns() {
+            const positions = ['1', '2', '3', '4', '5', '6', 'L'];
+            positions.forEach(pos => {
+                const select = document.getElementById(`lineup-pos-${pos}`);
+                if (!select) return;
+                select.innerHTML = '<option value="">Select...</option>';
+                state.roster.forEach(p => {
+                    select.innerHTML += `<option value="${p.id}">#${p.num} ${p.name} (${p.role})</option>`;
+                });
+            });
+        }
+
+        function setInitialServe(team) {
+            state.serve = team;
+            if (team === 'us') {
+                document.getElementById('btn-serve-us').className = "px-4 py-1.5 text-xs font-black rounded text-white bg-red-600 uppercase tracking-wider transition-colors";
+                document.getElementById('btn-serve-them').className = "px-4 py-1.5 text-xs font-black rounded text-neutral-500 bg-transparent uppercase tracking-wider transition-colors hover:text-white";
+            } else {
+                document.getElementById('btn-serve-them').className = "px-4 py-1.5 text-xs font-black rounded text-black bg-white uppercase tracking-wider transition-colors";
+                document.getElementById('btn-serve-us').className = "px-4 py-1.5 text-xs font-black rounded text-neutral-500 bg-transparent uppercase tracking-wider transition-colors hover:text-white";
+            }
+            autoFillLineup();
+        }
+
+        function autoFillLineup() {
+            const s = state.roster.filter(p => p.role === 'S');
+            const oh = state.roster.filter(p => p.role === 'OH');
+            const mb = state.roster.filter(p => p.role === 'MB');
+            const op = state.roster.filter(p => p.role === 'OP');
+            const l = state.roster.filter(p => p.role === 'L');
+
+            if (s.length < 1 || oh.length < 2 || mb.length < 2 || op.length < 1 || l.length < 1) return;
+
+            let mapping = {};
+            if (state.serve === 'us') {
+                mapping = { 1: s[0], 2: oh[0], 3: mb[0], 4: op[0], 5: oh[1], 6: mb[1], 'L': l[0] };
+            } else {
+                mapping = { 1: mb[1], 2: s[0], 3: oh[0], 4: mb[0], 5: op[0], 6: oh[1], 'L': l[0] };
+            }
+
+            ['1', '2', '3', '4', '5', '6', 'L'].forEach(pos => {
+                const select = document.getElementById(`lineup-pos-${pos}`);
+                if (select && mapping[pos]) {
+                    select.value = mapping[pos].id;
+                }
+            });
+        }
+
+        function startGame() {
+            const selectedIds = new Set();
+            for (let i = 1; i <= 6; i++) {
+                const val = document.getElementById(`lineup-pos-${i}`).value;
+                if (!val) return showToast("⚠️ Fill all positions", true);
+                if (selectedIds.has(val)) return showToast("⚠️ Duplicate players!", true);
+                selectedIds.add(val);
+                state.court[i] = state.roster.find(p => p.id === val);
+                state.lineup[i] = state.court[i];
+            }
+            
+            const lVal = document.getElementById(`lineup-pos-L`).value;
+            if (!lVal) return showToast("⚠️ Select a Starting Libero", true);
+            if (selectedIds.has(lVal)) return showToast("⚠️ Libero is in starting 6", true);
+            
+            state.startingLibero = state.roster.find(p => p.id === lVal);
+            state.replacedMB = null;
+
+            document.getElementById('view-setup').classList.add('hidden');
+            document.getElementById('view-court').classList.remove('hidden');
+            document.getElementById('view-court').classList.add('flex');
+            
+            updateScoreboard();
+            renderCourt();
+            
+            if (state.serve === 'us') {
+                setTimeout(() => openActionPanel(1, true), 500);
+            }
+        }
+
+        // --- Court Render & Logic ---
+        function renderCourt() {
+            const court = document.getElementById('court-nodes');
+            court.innerHTML = '';
+            
+            for (let i = 1; i <= 6; i++) {
+                const player = state.court[i];
+                if (!player) continue;
+                
+                const isServing = (state.serve === 'us' && i === 1);
+                const svgArt = SVGS[player.role] || SVGS['OH'];
+                
+                court.innerHTML += `
+                    <div class="player-node pos-${i} ${isServing ? 'active-server' : ''}" onclick="openActionPanel(${i})">
+                        <div class="node-svg-bg">${svgArt}</div>
+                        <div class="node-content">
+                            <span class="absolute top-1.5 left-2 text-xs font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">${player.num}</span>
+                            <span class="absolute top-1.5 right-2 text-[10px] font-black text-red-400 drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">${player.role}</span>
+                            <div class="absolute inset-0 flex items-center justify-center text-sm font-black text-white text-center px-1 uppercase tracking-wide z-10" style="text-shadow: 2px 2px 4px #000, -2px -2px 4px #000, 0 0 10px #000;">${player.name.split(' ')[0]}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function updateScoreboard() {
+            document.getElementById('score-us').innerText = state.score.us;
+            document.getElementById('score-them').innerText = state.score.them;
+            document.getElementById('sets-us').innerText = `Sets: ${state.sets.us}`;
+            document.getElementById('sets-them').innerText = `Sets: ${state.sets.them}`;
+            document.getElementById('current-set-label').innerText = `SET ${state.currentSet}`;
+            
+            if (state.serve === 'us') {
+                document.getElementById('serve-ind-us').classList.replace('bg-transparent', 'bg-red-600');
+                document.getElementById('serve-ind-them').classList.replace('bg-white', 'bg-transparent');
+            } else {
+                document.getElementById('serve-ind-us').classList.replace('bg-red-600', 'bg-transparent');
+                document.getElementById('serve-ind-them').classList.replace('bg-transparent', 'bg-white');
+            }
+        }
+
+        // --- Action Panel & Substitutions ---
+        function openActionPanel(pos, isServeMode = false) {
+            state.selectedPos = pos;
+            const p = state.court[pos];
+            document.getElementById('action-player-name').innerText = `#${p.num} ${p.name}`;
+            document.getElementById('action-pos-label').innerText = isServeMode ? `Pos ${pos} • Serving` : `Pos ${pos}`;
+            document.getElementById('action-role-icon').innerHTML = `<div class="w-6 h-6 relative">${SVGS[p.role] || SVGS['OH']}</div>`;
+            
+            if (isServeMode) {
+                document.getElementById('serve-actions-container').classList.remove('hidden');
+                document.getElementById('player-actions-container').classList.add('hidden');
+            } else {
+                document.getElementById('serve-actions-container').classList.add('hidden');
+                document.getElementById('player-actions-container').classList.remove('hidden');
+            }
+
+            document.getElementById('action-panel').classList.add('open');
+        }
+
+        function closeAction() {
+            document.getElementById('action-panel').classList.remove('open');
+        }
+
+        function openSubModal() {
+            const list = document.getElementById('sub-list');
+            list.innerHTML = '';
+            const currentCourtIds = Object.values(state.court).map(p => p.id);
+            const bench = state.roster.filter(p => !currentCourtIds.includes(p.id));
+            
+            bench.forEach(p => {
+                list.innerHTML += `
+                    <button onclick="executeSub('${p.id}')" class="w-full text-left bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 p-3 rounded mb-2 flex items-center gap-3 transition">
+                        <div class="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-600 relative overflow-hidden">${SVGS[p.role] || SVGS['OH']}</div>
+                        <div>
+                            <div class="font-black text-white text-sm">#${p.num} ${p.name}</div>
+                            <div class="text-[10px] text-neutral-400 font-bold">${p.role}</div>
+                        </div>
+                    </button>
+                `;
+            });
+            document.getElementById('sub-modal').classList.remove('hidden');
+        }
+
+        function closeSubModal() {
+            document.getElementById('sub-modal').classList.add('hidden');
+        }
+
+        function executeSub(playerId) {
+            const p = state.roster.find(p => p.id === playerId);
+            state.court[state.selectedPos] = p;
+            logEvent(`Sub: In #${p.num} for Pos ${state.selectedPos}`);
+            closeSubModal();
+            closeAction();
+            renderCourt();
+            showToast(`🔄 #${p.num} Subbed In`);
+        }
+
+        // --- Scouting Logic ---
+        function trackAction(type, quality, endsRally) {
+            const p = state.court[state.selectedPos];
+            logEvent(`[${type}] ${quality} - ${p.name}`);
+            closeAction();
+            
+            if (endsRally) {
+                if (quality === 'Err' || quality === '--' || quality === 'Mistake' || quality === 'Invasion' || quality === 'Block out') {
+                    // Our error -> Their point
+                    quickAction('them', 'point', true);
+                } else if (quality === 'Kill' || quality === 'Ace' || quality === 'Pt' || quality === 'Block') {
+                    // Our success -> Our point
+                    quickAction('us', 'point', true);
+                }
+            } else {
+                showToast(`✅ ${type} ${quality}`);
+            }
+        }
+
+        function quickAction(team, action, isAuto = false) {
+            if (team === 'us') {
+                state.score.us++;
+                if (state.serve === 'them') {
+                    state.serve = 'us';
+                    rotate();
+                }
+            } else {
+                state.score.them++;
+                if (state.serve === 'us') {
+                    state.serve = 'them';
+                    swapMiddleToLibero();
+                }
+            }
+
+            logEvent(`Point ${team === 'us' ? 'US' : 'THEM'} (${state.score.us}-${state.score.them})`);
+            updateScoreboard();
+            renderCourt();
+            
+            if (!isAuto) showToast(team === 'us' ? '🔥 Point US!' : '❌ Point THEM', team === 'them');
+            
+            if (checkSetWin()) return;
+            
+            // Auto-serve prompt after brief delay for visual context
+            if (team === 'us') {
+                setTimeout(() => openActionPanel(1, true), 800);
+            }
+        }
+
+        function rotate() {
+            const temp = state.court[1];
+            for (let i = 1; i < 6; i++) state.court[i] = state.court[i + 1];
+            state.court[6] = temp;
+            swapLiberoToMiddle();
+        }
+
+        // Auto Swap Logic based on Starting Libero
+        function swapLiberoToMiddle() {
+            if (!state.startingLibero) return;
+            // When rotating to serve, if L goes to front row (Pos 4), swap with replaced MB (or bench MB)
+            if (state.court[4] && state.court[4].id === state.startingLibero.id) {
+                const currentCourtIds = Object.values(state.court).map(p => p.id);
+                let mbToEnter = null;
+                if (state.replacedMB && !currentCourtIds.includes(state.replacedMB.id)) {
+                    mbToEnter = state.replacedMB;
+                } else {
+                    const benchMBs = state.roster.filter(p => p.role === 'MB' && !currentCourtIds.includes(p.id));
+                    if (benchMBs.length > 0) mbToEnter = benchMBs[0];
+                }
+                if (mbToEnter) {
+                    state.court[4] = mbToEnter;
+                    state.replacedMB = null;
+                    showToast('🔄 Auto: MB in for L');
+                    logEvent('Auto-Sub: MB for Libero (Pos 4)');
+                }
+            }
+        }
+
+        function swapMiddleToLibero() {
+            if (!state.startingLibero) return;
+            // Do not enter if Libero is already on the court
+            const liberoOnCourt = Object.values(state.court).some(p => p && p.id === state.startingLibero.id);
+            if (liberoOnCourt) return;
+
+            // When losing serve, swap back-row MB (Pos 1, 6, or 5) with Starting Libero
+            const backRowPositions = [1, 6, 5];
+            for (const pos of backRowPositions) {
+                if (state.court[pos] && state.court[pos].role === 'MB') {
+                    state.replacedMB = state.court[pos];
+                    state.court[pos] = state.startingLibero;
+                    showToast('🔄 Auto: L in for MB');
+                    logEvent(`Auto-Sub: Libero for MB (Pos ${pos})`);
+                    break;
+                }
+            }
+        }
+
+        // --- Game Flow ---
+        function checkSetWin() {
+            const limit = state.currentSet === 5 ? 15 : 25;
+            if (state.score.us >= limit && state.score.us - state.score.them >= 2) {
+                state.sets.us++;
+                setTimeout(() => endSetPrompt('US WINS SET!'), 500);
+                return true;
+            }
+            if (state.score.them >= limit && state.score.them - state.score.us >= 2) {
+                state.sets.them++;
+                setTimeout(() => endSetPrompt('OPPONENT WINS SET!'), 500);
+                return true;
+            }
+            return false;
+        }
+
+        function endSetPrompt(msg) {
+            showToast(msg);
+            setTimeout(endSetConfirm, 2000);
+        }
+
+        function endSetConfirm() {
+            if(state.sets.us >= 3 || state.sets.them >= 3) {
+                showToast(`MATCH OVER! ${state.sets.us > state.sets.them ? 'US' : 'THEM'} WINS!`, true);
+                setTimeout(openStats, 2000);
+                return;
+            }
+            state.score = { us: 0, them: 0 };
+            state.replacedMB = null;
+            state.currentSet++;
+            logEvent(`--- START SET ${state.currentSet} ---`);
+            document.getElementById('view-court').classList.add('hidden');
+            document.getElementById('view-court').classList.remove('flex');
+            document.getElementById('view-setup').classList.remove('hidden');
+            setInitialServe('us'); // Reset setup view for next set
+        }
+
+        function reqConfirmReset() {
+            customConfirm("Are you sure you want to completely reset all match data?", () => {
+                state.score = { us: 0, them: 0 };
+                state.sets = { us: 0, them: 0 };
+                state.replacedMB = null;
+                state.currentSet = 1;
+                state.history = [];
+                document.getElementById('view-stats').classList.add('hidden');
+                document.getElementById('view-setup').classList.remove('hidden');
+                setInitialServe('us');
+                showToast("Match Data Reset", true);
+            });
+        }
+
+        // --- Utils & Exports ---
+        function logEvent(action) {
+            state.history.push({
+                set: state.currentSet,
+                score: `${state.score.us}-${state.score.them}`,
+                action: action,
+                time: new Date().toLocaleTimeString()
+            });
+        }
+
+        let toastTimeout;
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').innerText = isError ? '⚠️' : '🏐';
+            
+            toast.className = `toast px-6 py-3 rounded-full shadow-2xl font-black text-sm uppercase tracking-wide flex items-center gap-2 border ${isError ? 'bg-red-600 text-white border-red-500' : 'bg-white text-black border-neutral-300'} pointer-events-none`;
+            
+            toast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toast.classList.remove('show'), 2000);
+        }
+
+        function switchStatsTab(tab) {
+            state.statsTab = tab;
+            const pbpBtn = document.getElementById('tab-pbp');
+            const playerBtn = document.getElementById('tab-player');
+            
+            if (tab === 'pbp') {
+                pbpBtn.className = "flex-1 py-1.5 rounded-md text-xs font-black tracking-wider uppercase transition-colors bg-neutral-700 text-white";
+                playerBtn.className = "flex-1 py-1.5 rounded-md text-xs font-black tracking-wider uppercase transition-colors text-neutral-500 hover:text-white";
+            } else {
+                playerBtn.className = "flex-1 py-1.5 rounded-md text-xs font-black tracking-wider uppercase transition-colors bg-neutral-700 text-white";
+                pbpBtn.className = "flex-1 py-1.5 rounded-md text-xs font-black tracking-wider uppercase transition-colors text-neutral-500 hover:text-white";
+            }
+            renderStats();
+        }
+
+        function openStats() {
+            document.getElementById('view-court').classList.add('hidden');
+            document.getElementById('view-court').classList.remove('flex');
+            document.getElementById('view-stats').classList.remove('hidden');
+            
+            const filter = document.getElementById('stat-filter-set');
+            filter.innerHTML = '<option value="all">Match Total</option>';
+            for(let i=1; i<=state.currentSet; i++){
+                filter.innerHTML += `<option value="${i}">Set ${i}</option>`;
+            }
+            switchStatsTab('pbp'); // Default to Play by play
+        }
+
+        function closeStats() {
+            document.getElementById('view-stats').classList.add('hidden');
+            document.getElementById('view-court').classList.remove('hidden');
+            document.getElementById('view-court').classList.add('flex');
+        }
+
+        function renderStats() {
+            const container = document.getElementById('stats-container');
+            const setFilter = document.getElementById('stat-filter-set').value;
+            
+            let filteredHistory = state.history;
+            if (setFilter !== 'all') {
+                filteredHistory = state.history.filter(h => h.set == setFilter);
+            }
+
+            if (state.statsTab === 'pbp') {
+                container.innerHTML = `
+                    <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-3">
+                        <div class="space-y-1 text-sm font-mono hide-scrollbar">
+                            ${filteredHistory.map(h => `
+                                <div class="flex gap-3 py-1 border-b border-neutral-800/50 text-xs">
+                                    <span class="text-neutral-500 w-12 shrink-0">${h.score}</span>
+                                    <span class="${h.action.includes('Kill') || h.action.includes('Ace') || h.action.includes('Point US') || h.action.includes('Block') && !h.action.includes('out') ? 'text-green-400' : h.action.includes('Err') || h.action.includes('Mistake') || h.action.includes('Invasion') || h.action.includes('Point THEM') || h.action.includes('--') ? 'text-red-400' : 'text-neutral-300'}">${h.action}</span>
+                                </div>
+                            `).reverse().join('') || '<div class="text-neutral-500 italic text-center py-4">No events yet.</div>'}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Parse Player Stats
+                const pStats = {};
+                
+                filteredHistory.forEach(h => {
+                    // Regex expects: [ActionType] Quality - PlayerName
+                    const match = h.action.match(/\[(.*?)\] (.*?) - (.*)/);
+                    if (match) {
+                        const type = match[1];
+                        const qual = match[2];
+                        const name = match[3];
+                        
+                        if (!pStats[name]) {
+                            pStats[name] = {
+                                atk: { t: 0, k: 0, e: 0 },
+                                rec: { t: 0, perf: 0, pos: 0, e: 0 },
+                                srv: { t: 0, ace: 0, err: 0 },
+                                blk: { t: 0, pt: 0, tch: 0, err: 0 }
+                            };
+                        }
+                        
+                        const st = pStats[name];
+                        if (type === 'Attack') {
+                            st.atk.t++;
+                            if (qual === 'Kill') st.atk.k++;
+                            if (qual === 'Err') st.atk.e++;
+                        } else if (type === 'Pass') {
+                            st.rec.t++;
+                            if (qual === '++') { st.rec.perf++; st.rec.pos++; }
+                            if (qual === '+') { st.rec.pos++; }
+                            if (qual === '--') st.rec.e++;
+                        } else if (type === 'Serve') {
+                            st.srv.t++;
+                            if (qual === 'Ace') st.srv.ace++;
+                            if (qual === 'Mistake') st.srv.err++;
+                        } else if (type === 'Block') {
+                            st.blk.t++;
+                            if (qual === 'Block') st.blk.pt++;
+                            if (qual === 'Touch') st.blk.tch++;
+                            if (qual === 'Block out' || qual === 'Invasion') st.blk.err++;
+                        }
+                    }
+                });
+
+                if (Object.keys(pStats).length === 0) {
+                    container.innerHTML = '<div class="text-neutral-500 italic p-4 text-center">No player stats available for this filter.</div>';
+                    return;
+                }
+
+                // Render Player Cards
+                let html = '<div class="grid grid-cols-1 gap-4">';
+                const pct = (n, d) => d > 0 ? ((n/d)*100).toFixed(0) : 0;
+                const eff = (k, e, t) => t > 0 ? (((k-e)/t)*100).toFixed(0) : 0;
+
+                for (const [name, st] of Object.entries(pStats)) {
+                    html += `
+                        <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4 shadow">
+                            <h3 class="font-black text-white text-base border-b border-neutral-800 pb-2 mb-3 uppercase tracking-wider">${name}</h3>
+                            <div class="grid grid-cols-2 gap-y-4 gap-x-2">
+                                
+                                <!-- Attack -->
+                                <div class="bg-neutral-950/50 p-2 rounded border border-neutral-800/50">
+                                    <h4 class="text-[10px] uppercase text-neutral-500 font-bold mb-1">Attack</h4>
+                                    <div class="text-xs text-neutral-300">Total: ${st.atk.t}</div>
+                                    <div class="text-xs text-green-400 font-bold">Kills: ${st.atk.k} (${pct(st.atk.k, st.atk.t)}%)</div>
+                                    <div class="text-xs text-red-400">Err: ${st.atk.e}</div>
+                                    <div class="text-xs text-white font-bold mt-1 bg-neutral-800 inline-block px-1.5 py-0.5 rounded">Eff: ${eff(st.atk.k, st.atk.e, st.atk.t)}%</div>
+                                </div>
+
+                                <!-- Reception -->
+                                <div class="bg-neutral-950/50 p-2 rounded border border-neutral-800/50">
+                                    <h4 class="text-[10px] uppercase text-neutral-500 font-bold mb-1">Reception</h4>
+                                    <div class="text-xs text-neutral-300">Total: ${st.rec.t}</div>
+                                    <div class="text-xs text-green-400 font-bold">Pos (+/++): ${pct(st.rec.pos, st.rec.t)}%</div>
+                                    <div class="text-xs text-green-300 font-bold">Perf (++): ${pct(st.rec.perf, st.rec.t)}%</div>
+                                    <div class="text-xs text-red-400 mt-1">Err (--): ${st.rec.e}</div>
+                                </div>
+
+                                <!-- Service -->
+                                <div class="bg-neutral-950/50 p-2 rounded border border-neutral-800/50">
+                                    <h4 class="text-[10px] uppercase text-neutral-500 font-bold mb-1">Service</h4>
+                                    <div class="text-xs text-neutral-300">Total: ${st.srv.t}</div>
+                                    <div class="text-xs text-green-400 font-bold">Aces: ${st.srv.ace} (${pct(st.srv.ace, st.srv.t)}%)</div>
+                                    <div class="text-xs text-red-400 mt-1">Mistakes: ${st.srv.err}</div>
+                                </div>
+
+                                <!-- Block -->
+                                <div class="bg-neutral-950/50 p-2 rounded border border-neutral-800/50">
+                                    <h4 class="text-[10px] uppercase text-neutral-500 font-bold mb-1">Block</h4>
+                                    <div class="text-xs text-neutral-300">Total: ${st.blk.t}</div>
+                                    <div class="text-xs text-green-400 font-bold">Pts: ${st.blk.pt} (${pct(st.blk.pt, st.blk.t)}%)</div>
+                                    <div class="text-xs text-neutral-400">Touches: ${st.blk.tch}</div>
+                                    <div class="text-xs text-red-400 mt-1">Err: ${st.blk.err}</div>
+                                </div>
+
+                            </div>
+                        </div>
+                    `;
+                }
+                html += '</div>';
+                container.innerHTML = html;
+            }
+        }
+
+        function exportCSV() {
+            if(state.history.length === 0) return showToast("No data to export", true);
+            let csv = "Time,Set,Score,Action\n";
+            state.history.forEach(row => {
+                csv += `${row.time},${row.set},"${row.score}","${row.action}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `VolleyScout_Match_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Boot
+        initApp();
+    </script>
+</body>
+</html>
