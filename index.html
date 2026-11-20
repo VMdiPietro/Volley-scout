@@ -566,6 +566,11 @@
             state.startingLibero = state.roster.find(p => p.id === lVal);
             state.replacedMB = null;
 
+            // BUG FIX: Automatically swap Middle Blocker for Libero at the start if receiving
+            if (state.serve === 'them') {
+                swapMiddleToLibero();
+            }
+
             document.getElementById('view-setup').classList.add('hidden');
             document.getElementById('view-court').classList.remove('hidden');
             document.getElementById('view-court').classList.add('flex');
